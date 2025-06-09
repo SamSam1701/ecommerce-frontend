@@ -1,5 +1,4 @@
 /**
- * created by: @SamSam1701
  * description: GraphQL client example with request and response middleware
  */
 
@@ -9,57 +8,37 @@ import {
   ResponseMiddleware,
 } from "graphql-request";
 
-const endpoint = `https://api.spacex.land/graphql/`;
+import Cookies from "js-cookie";
 
-const getAccessToken = () => Promise.resolve(`some special token here`);
-
-{
-  /**
-   * Request middleware example (set actual auth token to each request):
-   */
-
-  const requestMiddleware: RequestMiddleware = async (request) => {
-    return {
-      ...request,
-      headers: {
-        ...request.headers,
-        "x-auth-token": await getAccessToken(),
-      },
-    };
+// This middleware adds an authentication token to the request headers
+const requestMiddleware: RequestMiddleware = async (request) => {
+  return {
+    ...request,
+    headers: {
+      ...request.headers,
+      Authorization: "Bearer " + Cookies.get("token") || "",
+      "Content-Type": "application/json",
+      accept: "application/json",
+    },
   };
+};
 
-  const _client = new GraphQLClient(endpoint, { requestMiddleware });
-}
-{
-  /**
-   * It's also possible to use an async function as a request middleware. The resolved data will be passed to the request:
-   */
+// This middleware adds an authentication token to the request headers
+const responseMiddleware: ResponseMiddleware = (response) => {
+  if (!(response instanceof Error) && response.errors) {
+    const traceId = response.headers.get(`x-b3-trace-id`) || `unknown`;
+    console.error(
+      `[${traceId}] Request error:
+      status ${String(response.status)}
+      details: ${response.errors.map((_) => _.message).join(`, `)}`
+    );
+  }
+};
 
-  const requestMiddleware: RequestMiddleware = async (request) => {
-    const token = await getAccessToken();
-    return {
-      ...request,
-      headers: { ...request.headers, "x-auth-token": token },
-    };
-  };
+const graphQLClient = new GraphQLClient(`${process.env.PUBLIC_API_GRAPHQL}`, {
+  requestMiddleware,
+  responseMiddleware,
+  errorPolicy: "all",
+});
 
-  const _client = new GraphQLClient(endpoint, { requestMiddleware });
-}
-{
-  /**
-   * Response middleware example (log request trace id if error caused):
-   */
-
-  const responseMiddleware: ResponseMiddleware = (response) => {
-    if (!(response instanceof Error) && response.errors) {
-      const traceId = response.headers.get(`x-b3-trace-id`) || `unknown`;
-      console.error(
-        `[${traceId}] Request error:
-        status ${String(response.status)}
-        details: ${response.errors.map((_) => _.message).join(`, `)}`
-      );
-    }
-  };
-
-  const _client = new GraphQLClient(endpoint, { responseMiddleware });
-}
+export default graphQLClient; // GraphQL client with request and response middleware
